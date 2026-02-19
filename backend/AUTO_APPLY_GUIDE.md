@@ -36,7 +36,7 @@ Compare Results
 ### 1. **Basic Auto-Apply via API**
 
 ```bash
-curl -X POST http://localhost:5000/api/healing/heal \
+curl -X POST http://localhost:5001/api/healing/heal \
   -H "Content-Type: application/json" \
   -d '{
     "testLogs": "FAIL src/test.js\n...",
@@ -73,7 +73,7 @@ if (result.fixesApplied) {
 ### 3. **Via Run-and-Heal Endpoint**
 
 ```bash
-curl -X POST http://localhost:5000/api/healing/run-and-heal \
+curl -X POST http://localhost:5001/api/healing/run-and-heal \
   -H "Content-Type: application/json" \
   -d '{
     "testCommand": "npm test",

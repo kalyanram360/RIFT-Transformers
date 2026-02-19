@@ -95,7 +95,7 @@ You now have a LangChain State Graph with:
 3. Start the server:
    npm start
 
-   → Healing API available at http://localhost:5000/api/healing/*
+   → Healing API available at http://localhost:5001/api/healing/*
 
 
 🌐 API ENDPOINTS (6 endpoints ready)
@@ -209,7 +209,7 @@ zod                     → State validation
 Immediate:
   1. Run: npm run quickstart               (see the guide)
   2. Try: npm run heal:simple              (run an example)
-  3. Test: curl -X POST http://localhost:5000/api/healing/heal ...
+  3. Test: curl -X POST http://localhost:5001/api/healing/heal ...
 
 This Week:
   • Connect to actual test runner

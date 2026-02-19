@@ -3,10 +3,6 @@ const path = require("path");
 const fs = require("fs");
 const util = require("util");
 const execPromise = util.promisify(exec);
-const { GoogleGenerativeAI } = require("@google/generative-ai");
-
-const genAI = new GoogleGenerativeAI(process.env.GOOGLE_API_KEY);
-const model = genAI.getGenerativeModel({ model: "gemini-2.0-pro" });
 
 // Create logs directory if it doesn't exist
 const logsDir = path.join(__dirname, "..", "logs");
@@ -76,23 +72,36 @@ const getDirectoryStructure = async (containerName, workDir) => {
 };
 
 /**
- * Helper: Ask Gemini to identify test config file
+ * Helper: Detect test config file (RULE-BASED - No AI call)
  */
 const askApiWhereTestConfigIs = async (fileList) => {
-  try {
-    const prompt = `You are a build system expert. Given this list of files, identify which single file contains the test command configuration (e.g. package.json, pyproject.toml, setup.cfg, Makefile, etc.). Reply with ONLY the full file path, nothing else.
+  const patterns = [
+    { regex: /package\.json$/i, priority: 1 },
+    { regex: /pyproject\.toml$/i, priority: 2 },
+    { regex: /setup\.py$/i, priority: 3 },
+    { regex: /setup\.cfg$/i, priority: 4 },
+    { regex: /pytest\.ini$/i, priority: 5 },
+    { regex: /tox\.ini$/i, priority: 6 },
+    { regex: /Makefile$/i, priority: 7 },
+    { regex: /Cargo\.toml$/i, priority: 8 },
+    { regex: /composer\.json$/i, priority: 9 },
+    { regex: /pom\.xml$/i, priority: 10 },
+    { regex: /build\.gradle$/i, priority: 11 },
+  ];
 
-Files:
-${fileList.slice(0, 100).join("\n")}`;
+  const matches = fileList
+    .map(file => {
+      for (const pattern of patterns) {
+        if (pattern.regex.test(file)) {
+          return { file, priority: pattern.priority };
+        }
+      }
+      return null;
+    })
+    .filter(Boolean)
+    .sort((a, b) => a.priority - b.priority);
 
-    const response = await model.generateContent(prompt);
-    const text = response.response.text();
-
-    return text.trim();
-  } catch (error) {
-    console.log("Gemini config detection skipped:", error.message);
-    return null;
-  }
+  return matches.length > 0 ? matches[0].file : null;
 };
 
 /**
@@ -112,25 +121,41 @@ const readFileFromContainer = async (containerName, filePath) => {
 };
 
 /**
- * Helper: Ask Gemini for test command
+ * Helper: Extract test command (RULE-BASED - No AI call)
  */
 const askApiForTestCommand = async (filePath, fileContent) => {
+  const fileName = filePath.split('/').pop().toLowerCase();
+
   try {
-    const prompt = `You are a build system expert. Extract the exact shell command to run the test suite from "${filePath}".
-
-Content:
-\`\`\`
-${fileContent.substring(0, 2000)}
-\`\`\`
-
-Reply with ONLY the shell command (e.g., "npm test", "pytest", "python -m unittest"). If not found, reply "NO_TEST_COMMAND_FOUND".`;
-
-    const response = await model.generateContent(prompt);
-    const text = response.response.text();
-
-    return text.trim();
+    if (fileName === 'package.json') {
+      const pkg = JSON.parse(fileContent);
+      return pkg.scripts?.test ? 'npm test' : null;
+    }
+    if (fileName === 'pyproject.toml') {
+      return fileContent.includes('pytest') ? 'pytest' : 'python -m unittest';
+    }
+    if (fileName === 'setup.py' || fileName === 'setup.cfg') {
+      return 'python -m pytest';
+    }
+    if (fileName === 'pytest.ini' || fileName === 'tox.ini') {
+      return 'pytest';
+    }
+    if (fileName === 'makefile') {
+      const testTargets = ['test', 'check', 'tests'];
+      for (const target of testTargets) {
+        if (fileContent.toLowerCase().includes(target + ':')) {
+          return `make ${target}`;
+        }
+      }
+      return 'make test';
+    }
+    if (fileName === 'cargo.toml') return 'cargo test';
+    if (fileName === 'composer.json') return 'composer test';
+    if (fileName === 'pom.xml') return 'mvn test';
+    if (fileName === 'build.gradle') return './gradlew test';
+    return null;
   } catch (error) {
-    console.log("Gemini test command extraction skipped:", error.message);
+    console.log('Error parsing config:', error.message);
     return null;
   }
 };
@@ -357,10 +382,14 @@ const cloneIntoSandbox = async (req, res) => {
       `docker run -d --name ${containerName} --memory="512m" --cpus="1" --network=host ${baseImage} sleep infinity`,
     );
 
-    // Install git inside the container
-    console.log(`Installing git in sandbox...`);
+    // Install git and Node.js inside the container
+    console.log(`Installing git and Node.js in sandbox...`);
     await execPromise(
-      `docker exec ${containerName} apt-get update -qq && docker exec ${containerName} apt-get install -y git -qq`,
+      `docker exec ${containerName} bash -c "apt-get update -qq && apt-get install -y git curl -qq"`,
+    );
+    // Install Node.js v18 LTS
+    await execPromise(
+      `docker exec ${containerName} bash -c "curl -fsSL https://deb.nodesource.com/setup_18.x | bash - && apt-get install -y nodejs -qq"`,
     );
 
     // Clone the repo inside the container

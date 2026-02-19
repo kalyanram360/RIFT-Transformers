@@ -3,10 +3,6 @@ const util = require("util");
 const execPromise = util.promisify(exec);
 const fs = require("fs");
 const path = require("path");
-const { GoogleGenerativeAI } = require("@google/generative-ai");
-
-const genAI = new GoogleGenerativeAI(process.env.GOOGLE_API_KEY);
-const model = genAI.getGenerativeModel({ model: "gemini-2.0-pro" });
 
 // Create logs directory if it doesn't exist
 const logsDir = path.join(__dirname, "..", "logs");
@@ -53,26 +49,42 @@ const getDirectoryStructure = async (containerName, workDir) => {
 };
 
 /**
- * STEP 2 — Ask Claude which file contains test config
+ * STEP 2 — Detect test config file (RULE-BASED - No AI call)
  */
 const askApiWhereTestConfigIs = async (fileList) => {
-  try {
-    const prompt = `You are a build system expert. Given this list of files from a repository, identify which single file most likely contains the test command configuration (e.g. package.json for Node.js, pyproject.toml or setup.cfg or Makefile for Python, etc.).
+  // Rule-based detection to save API calls
+  const patterns = [
+    { regex: /package\.json$/i, priority: 1 },          // Node.js
+    { regex: /pyproject\.toml$/i, priority: 2 },       // Python (Poetry)
+    { regex: /setup\.py$/i, priority: 3 },              // Python
+    { regex: /setup\.cfg$/i, priority: 4 },             // Python
+    { regex: /pytest\.ini$/i, priority: 5 },            // Python (pytest)
+    { regex: /tox\.ini$/i, priority: 6 },               // Python (tox)
+    { regex: /Makefile$/i, priority: 7 },               // Makefile
+    { regex: /Cargo\.toml$/i, priority: 8 },            // Rust
+    { regex: /composer\.json$/i, priority: 9 },         // PHP
+    { regex: /pom\.xml$/i, priority: 10 },              // Java (Maven)
+    { regex: /build\.gradle$/i, priority: 11 },         // Java (Gradle)
+  ];
 
-File list:
-${fileList.slice(0, 100).join("\n")}
+  // Find matching files with priority
+  const matches = fileList
+    .map(file => {
+      for (const pattern of patterns) {
+        if (pattern.regex.test(file)) {
+          return { file, priority: pattern.priority };
+        }
+      }
+      return null;
+    })
+    .filter(Boolean)
+    .sort((a, b) => a.priority - b.priority);
 
-Reply with ONLY the full file path. Nothing else. No explanation.`;
-
-    const response = await model.generateContent(prompt);
-    const text = response.response.text();
-
-    return text.trim();
-  } catch (error) {
-    throw new Error(
-      `Gemini API error (config file detection): ${error.message}`,
-    );
+  if (matches.length > 0) {
+    return matches[0].file;
   }
+
+  throw new Error("No test configuration file detected");
 };
 
 /**
@@ -92,33 +104,73 @@ const readFileFromContainer = async (containerName, filePath) => {
 };
 
 /**
- * STEP 4 — Ask Claude what the test command is
+ * STEP 4 — Extract test command (RULE-BASED - No AI call)
  */
 const askApiForTestCommand = async (filePath, fileContent) => {
+  const fileName = filePath.split('/').pop().toLowerCase();
+
   try {
-    const prompt = `You are a build system expert. Given the content of "${filePath}", extract the exact shell command to run the test suite.
+    // package.json (Node.js)
+    if (fileName === 'package.json') {
+      const packageJson = JSON.parse(fileContent);
+      if (packageJson.scripts && packageJson.scripts.test) {
+        return 'npm test';
+      }
+      return 'NO_TEST_COMMAND_FOUND';
+    }
 
-File content:
-\`\`\`
-${fileContent.substring(0, 3000)}
-\`\`\`
+    // pyproject.toml (Python)
+    if (fileName === 'pyproject.toml') {
+      if (fileContent.includes('pytest')) return 'pytest';
+      if (fileContent.includes('unittest')) return 'python -m unittest';
+      return 'pytest'; // default
+    }
 
-Rules:
-- For package.json: return something like "npm test" or "npm run test" or whatever the "test" script is.
-- For pyproject.toml / setup.cfg: return the pytest or unittest command.
-- For Makefile: return "make test" or the appropriate target.
-- If no test command is found, return "NO_TEST_COMMAND_FOUND".
+    // setup.py or setup.cfg (Python)
+    if (fileName === 'setup.py' || fileName === 'setup.cfg') {
+      return 'python -m pytest';
+    }
 
-Reply with ONLY the shell command. No explanation, no markdown, no quotes.`;
+    // pytest.ini or tox.ini
+    if (fileName === 'pytest.ini' || fileName === 'tox.ini') {
+      return 'pytest';
+    }
 
-    const response = await model.generateContent(prompt);
-    const text = response.response.text();
+    // Makefile
+    if (fileName === 'makefile') {
+      const testTargets = ['test', 'check', 'tests'];
+      for (const target of testTargets) {
+        if (fileContent.toLowerCase().includes(target + ':')) {
+          return `make ${target}`;
+        }
+      }
+      return 'make test';
+    }
 
-    return text.trim();
+    // Cargo.toml (Rust)
+    if (fileName === 'cargo.toml') {
+      return 'cargo test';
+    }
+
+    // composer.json (PHP)
+    if (fileName === 'composer.json') {
+      return 'composer test';
+    }
+
+    // pom.xml (Maven)
+    if (fileName === 'pom.xml') {
+      return 'mvn test';
+    }
+
+    // build.gradle (Gradle)
+    if (fileName === 'build.gradle') {
+      return './gradlew test';
+    }
+
+    return 'NO_TEST_COMMAND_FOUND';
   } catch (error) {
-    throw new Error(
-      `Gemini API error (test command extraction): ${error.message}`,
-    );
+    console.error('Error parsing config file:', error.message);
+    return 'NO_TEST_COMMAND_FOUND';
   }
 };
 

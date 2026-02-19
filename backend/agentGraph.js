@@ -56,31 +56,36 @@ const StateSchema = z.object({
 });
 
 // ===========================
-// 🧩 STEP 2: Initialize Multi-Model Agents (Using Google Gemini)
+// 🧩 STEP 2: Initialize Multi-Model Agents (Distributed Load)
 // ===========================
+// Using different models per agent to distribute API load
+// - Extractor & Classifier: Fast models (flash) for simple parsing
+// - Patcher: Powerful model (pro) for quality fixes
+// - Verifier: Fast model (flash) for validation
+
 const extractorModel = new ChatGoogleGenerativeAI({
-  model: "gemini-2.0-pro",
+  model: process.env.EXTRACTOR_MODEL || "gemini-1.5-flash",
   apiKey: process.env.GOOGLE_API_KEY,
   temperature: 0,
   maxOutputTokens: 2000,
 });
 
 const classifierModel = new ChatGoogleGenerativeAI({
-  model: "gemini-2.0-pro",
+  model: process.env.CLASSIFIER_MODEL || "gemini-1.5-flash",
   apiKey: process.env.GOOGLE_API_KEY,
   temperature: 0,
   maxOutputTokens: 1000,
 });
 
 const patchModel = new ChatGoogleGenerativeAI({
-  model: "gemini-2.0-pro",
+  model: process.env.PATCHER_MODEL || "gemini-1.5-pro",
   apiKey: process.env.GOOGLE_API_KEY,
   temperature: 0,
   maxOutputTokens: 3000,
 });
 
 const verifierModel = new ChatGoogleGenerativeAI({
-  model: "gemini-2.0-pro",
+  model: process.env.VERIFIER_MODEL || "gemini-1.5-flash",
   apiKey: process.env.GOOGLE_API_KEY,
   temperature: 0,
   maxOutputTokens: 500,

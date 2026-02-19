@@ -6,7 +6,7 @@ $cloneBody = @{
     leaderName = "DEV"
 } | ConvertTo-Json
 
-$cloneResponse = Invoke-WebRequest -Uri "http://localhost:5000/api/docker/clone" `
+$cloneResponse = Invoke-WebRequest -Uri "http://localhost:5001/api/docker/clone" `
   -Method POST -ContentType "application/json" -Body $cloneBody
 
 $cloneResult = $cloneResponse.Content | ConvertFrom-Json
@@ -40,7 +40,7 @@ if ($cloneResult.tests) {
     if ($logFile) {
         Write-Host "`n=== RETRIEVING FULL TEST LOG ===" -ForegroundColor Cyan
         try {
-            $logResponse = Invoke-WebRequest -Uri "http://localhost:5000/api/test-runner/logs/$logFile" `
+            $logResponse = Invoke-WebRequest -Uri "http://localhost:5001/api/test-runner/logs/$logFile" `
               -Method GET
             
             $logResult = $logResponse.Content | ConvertFrom-Json
@@ -60,7 +60,7 @@ if ($cloneResult.tests) {
 # STEP 3: List all available test logs
 Write-Host "`n=== AVAILABLE TEST LOGS ===" -ForegroundColor Cyan
 try {
-    $logsResponse = Invoke-WebRequest -Uri "http://localhost:5000/api/test-runner/logs" `
+    $logsResponse = Invoke-WebRequest -Uri "http://localhost:5001/api/test-runner/logs" `
       -Method GET
     
     $logsResult = $logsResponse.Content | ConvertFrom-Json
@@ -71,4 +71,97 @@ try {
     }
 } catch {
     Write-Host "Error retrieving logs: $($_.Exception.Message)" -ForegroundColor Red
+}
+
+# STEP 4: AUTO-HEALING LOOP - Fix code until all tests pass
+if ($cloneResult.tests -and $cloneResult.tests.exitCode -ne 0) {
+    Write-Host "`n=== STARTING AUTO-HEALING WORKFLOW ===" -ForegroundColor Cyan
+    Write-Host "Tests failed. Initiating multi-agent healing loop..." -ForegroundColor Yellow
+    
+    $maxIterations = 5
+    $iteration = 1
+    $testsPassed = $false
+    $containerName = $cloneResult.containerName
+    $workDir = $cloneResult.workDir
+    
+    while (-not $testsPassed -and $iteration -le $maxIterations) {
+        Write-Host "`n--- HEALING ITERATION $iteration/$maxIterations ---" -ForegroundColor Magenta
+        
+        try {
+            # Get the latest test log
+            $logResponse = Invoke-WebRequest -Uri "http://localhost:5001/api/test-runner/logs/$logFile" -Method GET
+            $logResult = $logResponse.Content | ConvertFrom-Json
+            
+            Write-Host "Analyzing test failures with AI agents..." -ForegroundColor Yellow
+            
+            # Call healing API with auto-apply enabled
+            $healBody = @{
+                testLogs = $logResult.content
+                options = @{
+                    reportFormat = "json"
+                    autoApply = $true
+                    containerName = $containerName
+                    workDir = $workDir
+                    commitMessage = "AI Fix Iteration $iteration - Auto-healing test failures"
+                }
+            } | ConvertTo-Json -Depth 10
+            
+            Write-Host "Sending to multi-agent healing system..." -ForegroundColor Cyan
+            $healResponse = Invoke-WebRequest -Uri "http://localhost:5001/api/healing/heal" `
+              -Method POST -ContentType "application/json" -Body $healBody
+            
+            $healResult = $healResponse.Content | ConvertFrom-Json
+            
+            Write-Host "`n✅ Healing completed!" -ForegroundColor Green
+            Write-Host "- Total Failures: $($healResult.statistics.totalFailures)" -ForegroundColor Yellow
+            Write-Host "- Fixes Generated: $($healResult.statistics.patched)" -ForegroundColor Yellow
+            Write-Host "- Fixes Approved: $($healResult.statistics.approved)" -ForegroundColor Yellow
+            Write-Host "- Approval Rate: $($healResult.statistics.approvalRate)" -ForegroundColor Yellow
+            
+            if ($healResult.fixesApplied) {
+                Write-Host "✅ Fixes applied to code!" -ForegroundColor Green
+                
+                # Re-run tests
+                Write-Host "`nRe-running tests to verify fixes..." -ForegroundColor Cyan
+                $retestBody = @{
+                    workDir = $workDir
+                } | ConvertTo-Json
+                
+                $retestResponse = Invoke-WebRequest -Uri "http://localhost:5001/api/test-runner/$containerName/run-tests" `
+                  -Method POST -ContentType "application/json" -Body $retestBody
+                
+                $retestResult = $retestResponse.Content | ConvertFrom-Json
+                $logFile = $retestResult.logFile
+                
+                Write-Host "`n=== RE-TEST RESULTS ===" -ForegroundColor Magenta
+                Write-Host "Exit Code: $($retestResult.output.exitCode)" -ForegroundColor Yellow
+                
+                if ($retestResult.output.exitCode -eq 0) {
+                    Write-Host "`n🎉 SUCCESS! All tests are now passing!" -ForegroundColor Green
+                    Write-Host "Total iterations: $iteration" -ForegroundColor Yellow
+                    $testsPassed = $true
+                } else {
+                    Write-Host "⚠️  Some tests still failing. Attempting next iteration..." -ForegroundColor Yellow
+                    $iteration++
+                }
+            } else {
+                Write-Host "❌ No fixes could be applied" -ForegroundColor Red
+                break
+            }
+            
+        } catch {
+            Write-Host "❌ Healing error: $($_.Exception.Message)" -ForegroundColor Red
+            break
+        }
+    }
+    
+    if (-not $testsPassed) {
+        Write-Host "`n⚠️  Max iterations reached or healing failed" -ForegroundColor Yellow
+        Write-Host "Final iteration: $iteration" -ForegroundColor Yellow
+        Write-Host "Some tests may still be failing. Manual review recommended." -ForegroundColor Yellow
+    }
+    
+    Write-Host "`n=== HEALING WORKFLOW COMPLETE ===" -ForegroundColor Cyan
+} elseif ($cloneResult.tests -and $cloneResult.tests.exitCode -eq 0) {
+    Write-Host "`n✅ All tests passed! No healing needed." -ForegroundColor Green
 }

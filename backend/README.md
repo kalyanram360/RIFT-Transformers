@@ -40,13 +40,13 @@ npm install
 
 ```bash
 # Get all users
-curl http://localhost:5000/api/users
+curl http://localhost:5001/api/users
 
 # Get user by ID
-curl http://localhost:5000/api/users/1
+curl http://localhost:5001/api/users/1
 
 # Create a new user
-curl -X POST http://localhost:5000/api/users \
+curl -X POST http://localhost:5001/api/users \
   -H "Content-Type: application/json" \
   -d '{"name":"John","email":"john@example.com"}'
 ```
@@ -56,6 +56,6 @@ curl -X POST http://localhost:5000/api/users \
 Create a `.env` file with:
 
 ```
-PORT=5000
+PORT=5001
 NODE_ENV=development
 ```

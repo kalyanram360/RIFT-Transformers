@@ -164,14 +164,14 @@ npm run heal:simple
 
 ```bash
 npm start
-# Server runs on http://localhost:5000
+# Server runs on http://localhost:5001
 # Includes /api/healing/* endpoints
 ```
 
 ### 5. Try API
 
 ```bash
-curl -X POST http://localhost:5000/api/healing/heal \
+curl -X POST http://localhost:5001/api/healing/heal \
   -H "Content-Type: application/json" \
   -d '{
     "testLogs": "FAIL src/test.js\n  ✗ error",

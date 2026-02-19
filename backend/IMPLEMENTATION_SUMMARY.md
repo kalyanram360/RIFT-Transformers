@@ -166,7 +166,7 @@ const result = await healTestErrors(testLogs, {
 #### Option 2: HTTP API
 
 ```bash
-curl -X POST http://localhost:5000/api/healing/heal \
+curl -X POST http://localhost:5001/api/healing/heal \
   -H "Content-Type: application/json" \
   -d '{"testLogs": "FAIL ...", "options": {"reportFormat": "json"}}'
 ```

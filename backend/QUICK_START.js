@@ -153,7 +153,7 @@ console.log(result.report);
 \n`);
 
 console.log(`🔹 Example 3: HTTP API call\n`);
-console.log(`curl -X POST http://localhost:5000/api/healing/heal \\
+console.log(`curl -X POST http://localhost:5001/api/healing/heal \\
   -H "Content-Type: application/json" \\
   -d '{ 
     "testLogs": "FAIL ...",
