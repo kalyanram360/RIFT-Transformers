@@ -6,7 +6,7 @@ const execPromise = util.promisify(exec);
 const { GoogleGenerativeAI } = require("@google/generative-ai");
 
 const genAI = new GoogleGenerativeAI(process.env.GOOGLE_API_KEY);
-const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash" });
+const model = genAI.getGenerativeModel({ model: "gemini-2.0-pro" });
 
 // Create logs directory if it doesn't exist
 const logsDir = path.join(__dirname, "..", "logs");
@@ -48,6 +48,16 @@ const validateGithubUrl = (url) => {
   const githubPattern = /^https:\/\/github\.com\/[\w.-]+\/[\w.-]+(\.git)?$/;
   if (!githubPattern.test(url)) throw new Error("Invalid GitHub URL format");
   return url;
+};
+
+/**
+ * Helper: Sanitize input string for safety
+ */
+const sanitize = (input) => {
+  if (typeof input !== "string") throw new Error("Invalid input type");
+  if (!/^[a-zA-Z0-9_\-./:\[\] ]+$/.test(input))
+    throw new Error(`Unsafe input detected: ${input}`);
+  return input.trim();
 };
 
 /**

@@ -1,4 +1,5 @@
 const { runAgentGraph } = require("../agentGraph");
+const { applyFixesAndVerify, commitChanges } = require("./patchApplicator");
 
 // ===========================
 // 🔧 Test Error Healing Service
@@ -9,7 +10,14 @@ const { runAgentGraph } = require("../agentGraph");
  * patch, and verify test failures
  */
 async function healTestErrors(testLogs, options = {}) {
-  const { verbose = true, autoApply = false, reportFormat = "json" } = options;
+  const {
+    verbose = true,
+    autoApply = false,
+    reportFormat = "json",
+    containerName = null,
+    workDir = null,
+    commitMessage = null,
+  } = options;
 
   if (!testLogs || testLogs.trim().length === 0) {
     console.warn("⚠️  No test logs provided");
@@ -32,7 +40,7 @@ async function healTestErrors(testLogs, options = {}) {
       console.log(JSON.stringify(report, null, 2));
     }
 
-    return {
+    const response = {
       success: true,
       message: `Successfully processed ${workflowResult.failures.length} failures`,
       statistics: {
@@ -55,6 +63,44 @@ async function healTestErrors(testLogs, options = {}) {
       autoApply: autoApply,
       timestamp: new Date().toISOString(),
     };
+
+    // If autoApply enabled and approved fixes exist
+    if (
+      autoApply &&
+      workflowResult.finalFixes.length > 0 &&
+      containerName &&
+      workDir
+    ) {
+      console.log("\n🔄 [AUTO-APPLY] Auto-apply is enabled. Applying fixes...");
+
+      const applyResult = await applyFixesAndVerify(
+        containerName,
+        workDir,
+        workflowResult.finalFixes,
+        { stdout: testLogs },
+      );
+
+      response.autoApplyResult = applyResult;
+      response.fixesApplied = applyResult.success;
+
+      // Optionally commit changes
+      if (applyResult.success && commitMessage) {
+        const commitResult = await commitChanges(
+          containerName,
+          workDir,
+          commitMessage,
+        );
+        response.commitResult = commitResult;
+      }
+    } else if (autoApply && workflowResult.finalFixes.length === 0) {
+      console.log("\n⚠️  No approved fixes to apply");
+      response.autoApplyResult = {
+        success: false,
+        message: "No approved fixes",
+      };
+    }
+
+    return response;
   } catch (error) {
     console.error("❌ Healing service error:", error);
     return {

@@ -5,6 +5,8 @@
  * to automatically extract, classify, patch, and verify test errors
  */
 
+require("dotenv").config();
+
 const { runAgentGraph } = require("../agentGraph");
 const {
   healTestErrors,
@@ -223,6 +225,54 @@ async function example5_BatchProcessing() {
 // ===========================
 // 🚀 Run Examples
 // ===========================
+// 📝 Example 6: Auto-Apply Fixes
+// ===========================
+
+async function example6_AutoApplyFixes() {
+  console.log("\n🎯 Example 6: Auto-Apply Fixes to Container\n");
+
+  const testLogs = `
+FAIL src/services/auth.test.js
+  ✗ should validate token
+    ReferenceError: refreshToken is not defined
+      at validateToken (auth.js:25:10)
+  ✗ should hash password
+    TypeError: bcrypt.hash is not a function
+      at hashPassword (auth.js:40:5)
+`;
+
+  try {
+    const result = await healTestErrors(testLogs, {
+      verbose: true,
+      autoApply: true,
+      reportFormat: "json",
+      containerName: "my-app-container", // Your Docker container name
+      workDir: "/app", // Working directory in container
+      commitMessage: "Auto-fix test errors from healing system",
+    });
+
+    console.log("\n📊 Auto-Apply Result:");
+    console.log(JSON.stringify(result, null, 2));
+
+    if (result.fixesApplied) {
+      console.log("\n✅ Fixes were automatically applied!");
+      console.log("📝 Changes committed:", result.commitResult?.success);
+    } else {
+      console.log("\n❌ Fixes were not applied");
+      if (result.autoApplyResult) {
+        console.log("Reason:", result.autoApplyResult.recommendation);
+      }
+    }
+
+    return result;
+  } catch (error) {
+    console.error("❌ Error:", error.message);
+  }
+}
+
+// ===========================
+// 🚀 Run Examples
+// ===========================
 
 async function runAllExamples() {
   console.log("=".repeat(70));
@@ -237,6 +287,7 @@ async function runAllExamples() {
     // await example3_DirectGraphUsage();
     // await example4_TestResultsIntegration();
     // await example5_BatchProcessing();
+    // await example6_AutoApplyFixes();
 
     console.log("\n✅ All examples completed!\n");
   } catch (error) {
@@ -254,6 +305,7 @@ module.exports = {
   example3_DirectGraphUsage,
   example4_TestResultsIntegration,
   example5_BatchProcessing,
+  example6_AutoApplyFixes,
   runAllExamples,
 };
 

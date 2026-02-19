@@ -17,12 +17,18 @@ const {
 
 /**
  * Main endpoint to heal test errors
- * POST /api/test-runner/heal
+ * POST /api/healing/heal
  *
  * Body:
  * {
  *   "testLogs": "test output text",
- *   "options": { "reportFormat": "json|markdown|summary" }
+ *   "options": {
+ *     "reportFormat": "json|markdown|summary",
+ *     "autoApply": false,
+ *     "containerName": "container-id",
+ *     "workDir": "/app",
+ *     "commitMessage": "Fix test errors"
+ *   }
  * }
  */
 async function healTestErrors_Controller(req, res) {
@@ -42,6 +48,9 @@ async function healTestErrors_Controller(req, res) {
       verbose: true,
       autoApply: options.autoApply || false,
       reportFormat: options.reportFormat || "json",
+      containerName: options.containerName || null,
+      workDir: options.workDir || null,
+      commitMessage: options.commitMessage || null,
     });
 
     return res.status(200).json({
@@ -49,6 +58,9 @@ async function healTestErrors_Controller(req, res) {
       message: result.message,
       statistics: result.statistics,
       approvedFixesCount: result.results?.finalFixes?.length || 0,
+      fixesApplied: result.fixesApplied || false,
+      autoApplyResult: result.autoApplyResult || null,
+      commitResult: result.commitResult || null,
       report: result.report,
       timestamp: result.timestamp,
     });
@@ -92,18 +104,26 @@ async function getHealingStats_Controller(req, res) {
 /**
  * Auto-heal after test execution
  * Integrates with existing test runner
- * POST /api/test-runner/run-and-heal
+ * POST /api/healing/run-and-heal
  *
  * Body:
  * {
  *   "testCommand": "npm test",
- *   "containerName": "optional-container",
- *   "autoApplyFixes": false
+ *   "containerName": "container-id",
+ *   "workDir": "/app",
+ *   "autoApplyFixes": true,
+ *   "commitMessage": "Auto-fix test errors"
  * }
  */
 async function runTestsAndHeal_Controller(req, res) {
   try {
-    const { testCommand, containerName, autoApplyFixes = false } = req.body;
+    const {
+      testCommand,
+      containerName,
+      workDir = "/app",
+      autoApplyFixes = false,
+      commitMessage = null,
+    } = req.body;
 
     console.log(
       "\n🚀 [RUN & HEAL] Starting test execution with auto-healing...",
@@ -130,7 +150,51 @@ FAIL src/services/userService.test.js
     // Process test results with healing
     const healedResults = await processTestResults(testResults);
 
+    // If healing found approved fixes and auto-apply is enabled
+    if (
+      autoApplyFixes &&
+      healedResults.healingAttempt?.statistics?.approved > 0
+    ) {
+      console.log("\n🔄 [AUTO-APPLY] Applying approved fixes automatically...");
+
+      const automatedResult = await healTestErrors(
+        testResults.stdout + "\n" + testResults.stderr,
+        {
+          verbose: true,
+          autoApply: true,
+          reportFormat: "json",
+          containerName: containerName,
+          workDir: workDir,
+          commitMessage: commitMessage || "Auto-fix test errors",
+        },
+      );
+
+      return res.status(200).json({
+        success: true,
+        testResults: {
+          success: healedResults.success,
+          exit_code: healedResults.exit_code,
+        },
+        healing: {
+          attempted: true,
+          successful: healedResults.healed,
+          approvedFixes:
+            healedResults.healingAttempt?.statistics?.approved || 0,
+          approvalRate:
+            healedResults.healingAttempt?.statistics?.approvalRate || "0%",
+        },
+        autoApply: {
+          enabled: true,
+          applied: automatedResult.fixesApplied,
+          result: automatedResult.autoApplyResult,
+          commitResult: automatedResult.commitResult,
+          recommendations: automatedResult.autoApplyResult?.recommendation,
+        },
+      });
+    }
+
     return res.status(200).json({
+      success: true,
       testResults: {
         success: healedResults.success,
         exit_code: healedResults.exit_code,
@@ -143,8 +207,13 @@ FAIL src/services/userService.test.js
         approvalRate:
           healedResults.healingAttempt?.statistics?.approvalRate || "0%",
       },
+      autoApply: {
+        enabled: autoApplyFixes,
+        applied: false,
+        reason: "No approved fixes to apply or auto-apply disabled",
+      },
       recommendations: healedResults.healed
-        ? "Review and apply approved fixes"
+        ? "Review fixes and enable auto-apply to apply them automatically"
         : "Manual intervention required",
     });
   } catch (error) {

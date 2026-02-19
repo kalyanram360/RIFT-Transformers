@@ -59,28 +59,28 @@ const StateSchema = z.object({
 // 🧩 STEP 2: Initialize Multi-Model Agents (Using Google Gemini)
 // ===========================
 const extractorModel = new ChatGoogleGenerativeAI({
-  model: "gemini-2.0-flash",
+  model: "gemini-2.0-pro",
   apiKey: process.env.GOOGLE_API_KEY,
   temperature: 0,
   maxOutputTokens: 2000,
 });
 
 const classifierModel = new ChatGoogleGenerativeAI({
-  model: "gemini-2.0-flash",
+  model: "gemini-2.0-pro",
   apiKey: process.env.GOOGLE_API_KEY,
   temperature: 0,
   maxOutputTokens: 1000,
 });
 
 const patchModel = new ChatGoogleGenerativeAI({
-  model: "gemini-2.0-flash",
+  model: "gemini-2.0-pro",
   apiKey: process.env.GOOGLE_API_KEY,
   temperature: 0,
   maxOutputTokens: 3000,
 });
 
 const verifierModel = new ChatGoogleGenerativeAI({
-  model: "gemini-2.0-flash",
+  model: "gemini-2.0-pro",
   apiKey: process.env.GOOGLE_API_KEY,
   temperature: 0,
   maxOutputTokens: 500,
