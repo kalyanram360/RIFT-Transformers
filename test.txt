@@ -1,0 +1,74 @@
+# STEP 1: Clone repo (tests will run automatically)
+Write-Host "=== CLONING REPOSITORY ===" -ForegroundColor Cyan
+$cloneBody = @{
+    githubUrl = "https://github.com/kalyanram360/buddymatcher_node"
+    teamName = "BUDDYMATCHER"
+    leaderName = "DEV"
+} | ConvertTo-Json
+
+$cloneResponse = Invoke-WebRequest -Uri "http://localhost:5000/api/docker/clone" `
+  -Method POST -ContentType "application/json" -Body $cloneBody
+
+$cloneResult = $cloneResponse.Content | ConvertFrom-Json
+
+# Display results
+Write-Host "Container: $($cloneResult.containerName)" -ForegroundColor Yellow
+Write-Host "WorkDir: $($cloneResult.workDir)" -ForegroundColor Yellow
+
+# Test results are included automatically
+if ($cloneResult.tests) {
+    Write-Host "`n=== TEST RESULTS ===" -ForegroundColor Green
+    Write-Host "Config File: $($cloneResult.tests.configFile)"
+    Write-Host "Test Command: $($cloneResult.tests.testCommand)"
+    Write-Host "Exit Code: $($cloneResult.tests.exitCode)"
+    Write-Host "Success: $($cloneResult.tests.success)"
+    
+    # Display test output
+    Write-Host "`n=== STDOUT ===" -ForegroundColor Magenta
+    Write-Host $cloneResult.tests.stdout
+    
+    if ($cloneResult.tests.stderr) {
+        Write-Host "`n=== STDERR ===" -ForegroundColor Red
+        Write-Host $cloneResult.tests.stderr
+    }
+    
+    # Store log file info for later retrieval
+    $logFile = $cloneResult.tests.logFile
+    Write-Host "`nTest log saved to: $logFile" -ForegroundColor Yellow
+    
+    # STEP 2: Retrieve full test log from server
+    if ($logFile) {
+        Write-Host "`n=== RETRIEVING FULL TEST LOG ===" -ForegroundColor Cyan
+        try {
+            $logResponse = Invoke-WebRequest -Uri "http://localhost:5000/api/test-runner/logs/$logFile" `
+              -Method GET
+            
+            $logResult = $logResponse.Content | ConvertFrom-Json
+            
+            Write-Host "Log File: $($logResult.logFile)"
+            Write-Host "Log Size: $($logResult.size) bytes"
+            Write-Host "`n=== COMPLETE TEST LOG ===" -ForegroundColor Yellow
+            Write-Host $logResult.content
+        } catch {
+            Write-Host "Error retrieving log: $($_.Exception.Message)" -ForegroundColor Red
+        }
+    }
+} else {
+    Write-Host "No tests configured or auto-test disabled" -ForegroundColor Yellow
+}
+
+# STEP 3: List all available test logs
+Write-Host "`n=== AVAILABLE TEST LOGS ===" -ForegroundColor Cyan
+try {
+    $logsResponse = Invoke-WebRequest -Uri "http://localhost:5000/api/test-runner/logs" `
+      -Method GET
+    
+    $logsResult = $logsResponse.Content | ConvertFrom-Json
+    
+    Write-Host "Total test logs: $($logsResult.totalLogs)" -ForegroundColor Yellow
+    $logsResult.logs | ForEach-Object {
+        Write-Host "- $($_.fileName) (Size: $($_.size) bytes, Modified: $($_.modifiedAt))"
+    }
+} catch {
+    Write-Host "Error retrieving logs: $($_.Exception.Message)" -ForegroundColor Red
+}
