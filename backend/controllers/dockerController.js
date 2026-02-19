@@ -29,11 +29,21 @@ const logToFile = (message, logFile) => {
     console.error("Failed to write to log file:", err.message);
   }
 };
-if (typeof input !== "string") throw new Error("Invalid input type");
-// Allow alphanumeric, hyphens, underscores, dots, slashes, colons, spaces, and brackets
-if (!/^[a-zA-Z0-9_\-./:\[\] ]+$/.test(input))
-  throw new Error(`Unsafe input detected: ${input}`);
-return input.trim();
+
+/**
+ * Helper: Validate input string for safety
+ */
+const validateInput = (input) => {
+  if (typeof input !== "string") throw new Error("Invalid input type");
+  // Allow alphanumeric, hyphens, underscores, dots, slashes, colons, spaces, and brackets
+  if (!/^[a-zA-Z0-9_\-./:\[\] ]+$/.test(input))
+    throw new Error(`Unsafe input detected: ${input}`);
+  return input.trim();
+};
+
+/**
+ * Helper: Validate GitHub URL format
+ */
 const validateGithubUrl = (url) => {
   const githubPattern = /^https:\/\/github\.com\/[\w.-]+\/[\w.-]+(\.git)?$/;
   if (!githubPattern.test(url)) throw new Error("Invalid GitHub URL format");

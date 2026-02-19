@@ -9,9 +9,12 @@ app.use(express.json());
 const userRoutes = require("./routes/userRoutes");
 const dockerRoutes = require("./routes/dockerRoutes");
 const testRunnerRoutes = require("./routes/testRunnerRoutes");
+const healingRoutes = require("./routes/healingRoutes");
+
 app.use("/api/users", userRoutes);
 app.use("/api/docker", dockerRoutes);
 app.use("/api/test-runner", testRunnerRoutes);
+app.use("/api/healing", healingRoutes);
 
 // Error handling middleware
 app.use((err, req, res, next) => {

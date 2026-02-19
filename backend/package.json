@@ -9,12 +9,21 @@
   "scripts": {
     "start": "node index.js",
     "dev": "nodemon index.js",
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "heal": "node -e \"require('./examples/agentGraphExamples').runAllExamples().catch(console.error)\"",
+    "heal:simple": "node -e \"require('./examples/agentGraphExamples').example1_SimpleUsage().catch(console.error)\"",
+    "heal:report": "node -e \"require('./examples/agentGraphExamples').example2_WithReporting().catch(console.error)\"",
+    "heal:graph": "node -e \"require('./examples/agentGraphExamples').example3_DirectGraphUsage().catch(console.error)\"",
+    "heal:batch": "node -e \"require('./examples/agentGraphExamples').example5_BatchProcessing().catch(console.error)\"",
+    "quickstart": "node backend/QUICK_START.js"
   },
   "dependencies": {
-    "express": "^4.18.2",
+    "@google/generative-ai": "^0.21.0",
+    "@langchain/google-genai": "^2.1.19",
+    "@langchain/langgraph": "^1.1.5",
     "dotenv": "^16.3.1",
-    "@google/generative-ai": "^0.21.0"
+    "express": "^4.18.2",
+    "zod": "^4.3.6"
   },
   "devDependencies": {
     "nodemon": "^3.0.1"
